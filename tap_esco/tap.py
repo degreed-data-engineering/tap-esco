@@ -4,21 +4,32 @@ from typing import List
 from singer_sdk import Tap, Stream
 from singer_sdk import typing as th
 
-from tap_esco.streams import SkillsDetails
+from tap_esco.streams import (
+    EscoSkillsTaxonomyLevel1,
+    EscoSkillsTaxonomyLevel2,
+    EscoSkillsTaxonomyLevel3,
+    EscoSkillsTaxonomyLevel4,
+    # EscoSkillsList,
+    # EscoSkillsDetails,
+)
 
 PLUGIN_NAME = "tap-esco"
 
-STREAM_TYPES = [SkillsDetails]
+STREAM_TYPES = [
+    EscoSkillsTaxonomyLevel1,
+    EscoSkillsTaxonomyLevel2,
+    EscoSkillsTaxonomyLevel3,
+    EscoSkillsTaxonomyLevel4,
+    # EscoSkillsList,
+    # EscoSkillsDetails,
+]
 
 
 class TapEsco(Tap):
     """esco tap class."""
 
     name = "tap-esco"
-    config_jsonschema = th.PropertiesList(
-        th.Property("a", th.StringType, required=True, description="a"),
-        th.Property("b", th.StringType, required=True, description="b"),
-    ).to_dict()
+    # config_jsonschema = th.PropertiesList().to_dict()
 
     def discover_streams(self) -> List[Stream]:
         """Return a list of discovered streams."""
