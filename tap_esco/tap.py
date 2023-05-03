@@ -9,8 +9,7 @@ from tap_esco.streams import (
     EscoSkillsTaxonomyLevel2,
     EscoSkillsTaxonomyLevel3,
     EscoSkillsTaxonomyLevel4,
-    # EscoSkillsList,
-    # EscoSkillsDetails,
+    EscoSkillsDetails,
 )
 
 PLUGIN_NAME = "tap-esco"
@@ -20,8 +19,7 @@ STREAM_TYPES = [
     EscoSkillsTaxonomyLevel2,
     EscoSkillsTaxonomyLevel3,
     EscoSkillsTaxonomyLevel4,
-    # EscoSkillsList,
-    # EscoSkillsDetails,
+    EscoSkillsDetails,
 ]
 
 
@@ -29,7 +27,6 @@ class TapEsco(Tap):
     """esco tap class."""
 
     name = "tap-esco"
-    # config_jsonschema = th.PropertiesList().to_dict()
 
     def discover_streams(self) -> List[Stream]:
         """Return a list of discovered streams."""
