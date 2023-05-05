@@ -136,10 +136,13 @@ class EscoSkillsDetails(TapEscoStream):
                     level_check = uri.split("/")[len(uri.split("/")) - 1].count(".")
                     if level_check == 2:
                         row["uri_level_2"] = uri
+                        row["title_level_2"] = ancestor["title"]
                     if level_check == 1:
                         row["uri_level_1"] = uri
+                        row["title_level_1"] = ancestor["title"]
                     if level_check == 0:
                         row["uri_level_0"] = uri
+                        row["title_level_0"] = ancestor["title"]
         if "description" in row:
             if "en-us" in row["description"]:
                 row["description_en"] = row["description"]["en-us"]["literal"]
@@ -150,10 +153,13 @@ class EscoSkillsDetails(TapEscoStream):
 
     schema = th.PropertiesList(
         th.Property("uri", th.StringType),
-        th.Property("title", th.StringType),
         th.Property("uri_level_0", th.StringType),
         th.Property("uri_level_1", th.StringType),
         th.Property("uri_level_2", th.StringType),
+        th.Property("title", th.StringType),
+        th.Property("title_level_0", th.StringType),
+        th.Property("title_level_1", th.StringType),
+        th.Property("title_level_2", th.StringType),
         th.Property("alternativeLabel_en", th.StringType),
         th.Property("description_en", th.StringType),
     ).to_dict()
