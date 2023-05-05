@@ -5,20 +5,20 @@ from singer_sdk import Tap, Stream
 from singer_sdk import typing as th
 
 from tap_esco.streams import (
+    EscoSkillsTaxonomy,
+    EscoSkillsTaxonomyLevel0,
     EscoSkillsTaxonomyLevel1,
     EscoSkillsTaxonomyLevel2,
-    EscoSkillsTaxonomyLevel3,
-    EscoSkillsTaxonomyLevel4,
     EscoSkillsDetails,
 )
 
 PLUGIN_NAME = "tap-esco"
 
 STREAM_TYPES = [
+    EscoSkillsTaxonomy,
+    EscoSkillsTaxonomyLevel0,
     EscoSkillsTaxonomyLevel1,
     EscoSkillsTaxonomyLevel2,
-    EscoSkillsTaxonomyLevel3,
-    EscoSkillsTaxonomyLevel4,
     EscoSkillsDetails,
 ]
 

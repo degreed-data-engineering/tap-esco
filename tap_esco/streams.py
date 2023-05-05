@@ -4,13 +4,15 @@ import logging
 import requests
 from http import HTTPStatus
 from urllib.parse import unquote
-from typing import cast, Optional, Any
+from typing import cast, Optional, Any, Dict
 from singer_sdk import typing as th
 from singer_sdk.streams import RESTStream
 from singer_sdk.exceptions import FatalAPIError, RetriableAPIError
 
 
 logging.basicConfig(level=logging.INFO)
+
+base_uri = "http://data.europa.eu/esco/skill/S"
 
 
 class TapEscoStream(RESTStream):
@@ -42,187 +44,116 @@ class TapEscoStream(RESTStream):
             msg = self.response_error_message(response)
             raise FatalAPIError(msg)
 
+    def parse_response(self, response: requests.Response):
+        if response.json():
+            if "logref" not in response.json():
+                if response.json()["className"] == "Skill":
+                    yield response.json()
+                elif response.json()["className"] == "Concept":
+                    if "narrowerConcept" in response.json()["_links"]:
+                        for narrowerConcept in response.json()["_links"][
+                            "narrowerConcept"
+                        ]:
+                            yield {"uri": narrowerConcept["uri"]}
+                    elif "narrowerSkill" in response.json()["_links"]:
+                        for narrowerSkill in response.json()["_links"]["narrowerSkill"]:
+                            yield {"uri": narrowerSkill["uri"]}
+
     @property
     def url_base(self) -> str:
         """Base URL of source"""
         return f"https://ec.europa.eu/esco/api"
 
 
-class EscoSkillsTaxonomyLevel1(TapEscoStream):
-    rest_method = "GET"
-    name = "skills_taxonomy_level_1"  # Stream name
-    path = "/resource/concept"  # API endpoint after base_url
+class EscoSkillsTaxonomy(TapEscoStream):
+    name = "skills_taxonomy"  # Stream name
+    path = "/resource/concept?uri={base_uri}".format(
+        base_uri=base_uri
+    )  # API endpoint after base_url
     primary_keys = ["uri"]
-    records_jsonpath = "$._links.narrowerConcept[0:]"  # https://jsonpath.com Use requests response json to identify the json path
-
     schema = th.PropertiesList(th.Property("uri", th.StringType)).to_dict()
-
-    def prepare_request(
-        self, context: Optional[dict], next_page_token: Optional[Any]
-    ) -> requests.PreparedRequest:
-        http_method = self.rest_method
-        url: str = self.get_url(context)
-        params: dict = {"uri": "http://data.europa.eu/esco/skill/S"}
-
-        request = cast(
-            requests.PreparedRequest,
-            self.requests_session.prepare_request(
-                requests.Request(
-                    method=http_method,
-                    url=url,
-                    params=params,
-                )
-            ),
-        )
-        return request
 
     # https://sdk.meltano.com/en/latest/parent_streams.html
     def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
         """Return a context dictionary for child streams."""
-        global uri
-        uri = record["uri"]
-        return {"uri": uri}
+        return record
+
+
+class EscoSkillsTaxonomyLevel0(TapEscoStream):
+    parent_stream_type = EscoSkillsTaxonomy
+    name = "skills_taxonomy_level_0"  # Stream name
+    path = "/resource/concept?uri={uri}"  # API endpoint after base_url
+    primary_keys = ["uri"]
+    schema = th.PropertiesList(th.Property("uri", th.StringType)).to_dict()
+
+    # https://sdk.meltano.com/en/latest/parent_streams.html
+    def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
+        """Return a context dictionary for child streams."""
+        return record
+
+
+class EscoSkillsTaxonomyLevel1(TapEscoStream):
+    parent_stream_type = EscoSkillsTaxonomyLevel0
+    name = "skills_taxonomy_level_1"  # Stream name
+    path = "/resource/concept?uri={uri}"  # API endpoint after base_url
+    primary_keys = ["uri"]
+    schema = th.PropertiesList(th.Property("uri", th.StringType)).to_dict()
+
+    # https://sdk.meltano.com/en/latest/parent_streams.html
+    def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
+        """Return a context dictionary for child streams."""
+        return record
 
 
 class EscoSkillsTaxonomyLevel2(TapEscoStream):
     parent_stream_type = EscoSkillsTaxonomyLevel1
-    rest_method = "GET"
     name = "skills_taxonomy_level_2"  # Stream name
-    path = "/resource/concept"  # API endpoint after base_url
+    path = "/resource/concept?uri={uri}"  # API endpoint after base_url
     primary_keys = ["uri"]
-    records_jsonpath = "$._links.narrowerConcept[0:]"  # https://jsonpath.com Use requests response json to identify the json path
-
     schema = th.PropertiesList(th.Property("uri", th.StringType)).to_dict()
-
-    def prepare_request(
-        self, context: Optional[dict], next_page_token: Optional[Any]
-    ) -> requests.PreparedRequest:
-        http_method = self.rest_method
-        url: str = self.get_url(context)
-        params: dict = {"uri": {uri}}
-
-        request = cast(
-            requests.PreparedRequest,
-            self.requests_session.prepare_request(
-                requests.Request(
-                    method=http_method,
-                    url=url,
-                    params=params,
-                )
-            ),
-        )
-        return request
 
     # https://sdk.meltano.com/en/latest/parent_streams.html
     def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
         """Return a context dictionary for child streams."""
-        global uri
-        uri = record["uri"]
-        return {"uri": uri}
-
-
-class EscoSkillsTaxonomyLevel3(TapEscoStream):
-    parent_stream_type = EscoSkillsTaxonomyLevel2
-    rest_method = "GET"
-    name = "skills_taxonomy_level_3"  # Stream name
-    path = "/resource/concept"  # API endpoint after base_url
-    primary_keys = ["uri"]
-    records_jsonpath = "$._links.narrowerConcept[0:]"  # https://jsonpath.com Use requests response json to identify the json path
-
-    schema = th.PropertiesList(th.Property("uri", th.StringType)).to_dict()
-
-    def prepare_request(
-        self, context: Optional[dict], next_page_token: Optional[Any]
-    ) -> requests.PreparedRequest:
-        http_method = self.rest_method
-        url: str = self.get_url(context)
-        params: dict = {"uri": {uri}}
-
-        request = cast(
-            requests.PreparedRequest,
-            self.requests_session.prepare_request(
-                requests.Request(
-                    method=http_method,
-                    url=url,
-                    params=params,
-                )
-            ),
-        )
-        return request
-
-    # https://sdk.meltano.com/en/latest/parent_streams.html
-    def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
-        """Return a context dictionary for child streams."""
-        global uri
-        uri = record["uri"]
-        return {"uri": uri}
-
-
-class EscoSkillsTaxonomyLevel4(TapEscoStream):
-    parent_stream_type = EscoSkillsTaxonomyLevel3
-    rest_method = "GET"
-    name = "skills_taxonomy_level_4"  # Stream name
-    path = "/resource/concept"  # API endpoint after base_url
-    primary_keys = ["uri"]
-    records_jsonpath = "$._links.narrowerSkill[0:]"  # https://jsonpath.com Use requests response json to identify the json path
-
-    schema = th.PropertiesList(th.Property("uri", th.StringType)).to_dict()
-
-    def prepare_request(
-        self, context: Optional[dict], next_page_token: Optional[Any]
-    ) -> requests.PreparedRequest:
-        http_method = self.rest_method
-        url: str = self.get_url(context)
-        params: dict = {"uri": {uri}}
-
-        request = cast(
-            requests.PreparedRequest,
-            self.requests_session.prepare_request(
-                requests.Request(
-                    method=http_method,
-                    url=url,
-                    params=params,
-                )
-            ),
-        )
-        return request
-
-    # https://sdk.meltano.com/en/latest/parent_streams.html
-    def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
-        """Return a context dictionary for child streams."""
-        global uri
-        uri = record["uri"]
-        return {"uri": uri}
+        return record
 
 
 class EscoSkillsDetails(TapEscoStream):
-    parent_stream_type = EscoSkillsTaxonomyLevel4
-    rest_method = "GET"
+    parent_stream_type = EscoSkillsTaxonomyLevel2
     name = "skills_details"  # Stream name
-    path = "/resource/skill"  # API endpoint after base_url
+    path = "/resource/skill?uri={uri}"  # API endpoint after base_url
     primary_keys = ["uri"]
+
+    def post_process(
+        self, row: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        if "_embedded" in row:
+            if "ancestors" in row["_embedded"]:
+                for ancestor in row["_embedded"]["ancestors"]:
+                    uri = ancestor["_links"]["self"]["uri"]
+                    if uri == base_uri or uri == row["uri"]:
+                        next
+                    level_check = uri.split("/")[len(uri.split("/")) - 1].count(".")
+                    if level_check == 2:
+                        row["uri_level_2"] = uri
+                    if level_check == 1:
+                        row["uri_level_1"] = uri
+                    if level_check == 0:
+                        row["uri_level_0"] = uri
+        if "description" in row:
+            if "en-us" in row["description"]:
+                row["description_en"] = row["description"]["en-us"]["literal"]
+        if "alternativeLabel" in row:
+            if "en" in row["alternativeLabel"]:
+                row["alternativeLabel_en"] = " | ".join(row["alternativeLabel"]["en"])
+        return row
 
     schema = th.PropertiesList(
         th.Property("uri", th.StringType),
         th.Property("title", th.StringType),
-        # th.Property("source", th.ObjectType(th.Property("pages", th.IntegerType))),
+        th.Property("uri_level_0", th.StringType),
+        th.Property("uri_level_1", th.StringType),
+        th.Property("uri_level_2", th.StringType),
+        th.Property("alternativeLabel_en", th.StringType),
+        th.Property("description_en", th.StringType),
     ).to_dict()
-
-    def prepare_request(
-        self, context: Optional[dict], next_page_token: Optional[Any]
-    ) -> requests.PreparedRequest:
-        http_method = self.rest_method
-        url: str = self.get_url(context)
-        params: dict = {"uri": {uri}}
-
-        request = cast(
-            requests.PreparedRequest,
-            self.requests_session.prepare_request(
-                requests.Request(
-                    method=http_method,
-                    url=url,
-                    params=params,
-                )
-            ),
-        )
-        return request
