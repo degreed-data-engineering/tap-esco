@@ -4,7 +4,7 @@ import logging
 import requests
 from http import HTTPStatus
 from urllib.parse import unquote
-from typing import cast, Optional, Any, Dict
+from typing import Optional, Any, Dict
 from singer_sdk import typing as th
 from singer_sdk.streams import RESTStream
 from singer_sdk.exceptions import FatalAPIError, RetriableAPIError
