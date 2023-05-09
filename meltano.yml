@@ -10,9 +10,6 @@ plugins:
     - state
     - catalog
     - discover
-    config:
-      a: a
-      b: b
   loaders:
   - name: target-jsonl
     variant: andyh1203
