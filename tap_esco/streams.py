@@ -2,8 +2,10 @@
 
 import logging
 import requests
+import re
 from http import HTTPStatus
 from urllib.parse import unquote
+from urllib.request import urlopen
 from typing import Optional, Any, Dict
 from singer_sdk import typing as th
 from singer_sdk.streams import RESTStream
