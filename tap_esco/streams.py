@@ -22,26 +22,39 @@ class TapEscoStream(RESTStream):
 
     _LOG_REQUEST_METRIC_URLS: bool = True
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Getting last available ESCO version scraping ESCO website
+        esco_url = "https://esco.ec.europa.eu/en/classification/skill_main"
+        start_string = '<div class="block-wrapper--esco_version">'
+        end_string = "</div>"
+        regex = "v\d\.\d\.\d"
+        html = urlopen(esco_url).read().decode("utf-8")
+        start_index = html.find(start_string) + len(start_string)
+        end_index = start_index + html[start_index:].find(end_string)
+        html_slice = html[start_index:end_index]
+        self.version = re.findall(regex, html_slice)[0]
+
     def validate_response(self, response):
         """Updating the "validate_response" function of the Meltano SDK as ESCO can return an error state = 500 in case a URI has issues in it.
         See: https://github.com/meltano/sdk/blob/54222bb2dc1903c0816347952c6a77c30267f30f/singer_sdk/streams/rest.py
         """
-        if response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
+        if response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:  # 500
             msg = "Possible error are URI: {uri}".format(uri=unquote(str(response.url)))
-            logging.error(msg)
+            logging.warning(msg)
         if (
             response.status_code in self.extra_retry_statuses
-            or HTTPStatus.INTERNAL_SERVER_ERROR
+            or HTTPStatus.INTERNAL_SERVER_ERROR  # 500
             < response.status_code
-            <= max(HTTPStatus)
+            <= max(HTTPStatus)  # 511
         ):
             msg = self.response_error_message(response)
             raise RetriableAPIError(msg, response)
 
         if (
-            HTTPStatus.BAD_REQUEST
+            HTTPStatus.BAD_REQUEST  # 400
             <= response.status_code
-            < HTTPStatus.INTERNAL_SERVER_ERROR
+            < HTTPStatus.INTERNAL_SERVER_ERROR  # 500
         ):
             msg = self.response_error_message(response)
             raise FatalAPIError(msg)
@@ -78,7 +91,10 @@ class EscoSkillsTaxonomy(TapEscoStream):
     # https://sdk.meltano.com/en/latest/parent_streams.html
     def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
         """Return a context dictionary for child streams."""
-        return record
+        if self.version == self.replication_key_value:
+            return None
+        else:
+            return record
 
 
 class EscoSkillsTaxonomyLevel0(TapEscoStream):
