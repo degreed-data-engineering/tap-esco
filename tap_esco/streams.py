@@ -33,7 +33,7 @@ class TapEscoStream(RESTStream):
         start_index = html.find(start_string) + len(start_string)
         end_index = start_index + html[start_index:].find(end_string)
         html_slice = html[start_index:end_index]
-        self.version = re.findall(regex, html_slice)[0]
+        self.selectedVersion = re.findall(regex, html_slice)[0]
 
     def validate_response(self, response):
         """Updating the "validate_response" function of the Meltano SDK as ESCO can return an error state = 500 in case a URI has issues in it.
@@ -69,10 +69,16 @@ class TapEscoStream(RESTStream):
                         for narrowerConcept in response.json()["_links"][
                             "narrowerConcept"
                         ]:
-                            yield {"uri": narrowerConcept["uri"]}
+                            yield {
+                                "uri": narrowerConcept["uri"],
+                                "selectedVersion": self.selectedVersion,
+                            }
                     elif "narrowerSkill" in response.json()["_links"]:
                         for narrowerSkill in response.json()["_links"]["narrowerSkill"]:
-                            yield {"uri": narrowerSkill["uri"]}
+                            yield {
+                                "uri": narrowerSkill["uri"],
+                                "selectedVersion": self.selectedVersion,
+                            }
 
     @property
     def url_base(self) -> str:
@@ -81,18 +87,26 @@ class TapEscoStream(RESTStream):
 
 
 class EscoSkillsTaxonomy(TapEscoStream):
+
     name = "skills_taxonomy"  # Stream name
     path = "/resource/concept?uri={base_uri}".format(
         base_uri=base_uri
     )  # API endpoint after base_url
     primary_keys = ["uri"]
-    schema = th.PropertiesList(th.Property("uri", th.StringType)).to_dict()
+    replication_key = "selectedVersion"
+    schema = th.PropertiesList(
+        th.Property("uri", th.StringType), th.Property("selectedVersion", th.StringType)
+    ).to_dict()
 
     # https://sdk.meltano.com/en/latest/parent_streams.html
     def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
         """Return a context dictionary for child streams."""
-        if self.version == self.replication_key_value:
-            return None
+        if "replication_key_value" in self.stream_state:
+            if self.selectedVersion == self.stream_state["replication_key_value"]:
+                logging.info("ESCO version is up to date. Exiting.")
+                exit()
+            else:
+                return record
         else:
             return record
 
@@ -102,7 +116,9 @@ class EscoSkillsTaxonomyLevel0(TapEscoStream):
     name = "skills_taxonomy_level_0"  # Stream name
     path = "/resource/concept?uri={uri}"  # API endpoint after base_url
     primary_keys = ["uri"]
-    schema = th.PropertiesList(th.Property("uri", th.StringType)).to_dict()
+    schema = th.PropertiesList(
+        th.Property("uri", th.StringType), th.Property("selectedVersion", th.StringType)
+    ).to_dict()
 
     # https://sdk.meltano.com/en/latest/parent_streams.html
     def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
@@ -115,7 +131,9 @@ class EscoSkillsTaxonomyLevel1(TapEscoStream):
     name = "skills_taxonomy_level_1"  # Stream name
     path = "/resource/concept?uri={uri}"  # API endpoint after base_url
     primary_keys = ["uri"]
-    schema = th.PropertiesList(th.Property("uri", th.StringType)).to_dict()
+    schema = th.PropertiesList(
+        th.Property("uri", th.StringType), th.Property("selectedVersion", th.StringType)
+    ).to_dict()
 
     # https://sdk.meltano.com/en/latest/parent_streams.html
     def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
@@ -128,7 +146,9 @@ class EscoSkillsTaxonomyLevel2(TapEscoStream):
     name = "skills_taxonomy_level_2"  # Stream name
     path = "/resource/concept?uri={uri}"  # API endpoint after base_url
     primary_keys = ["uri"]
-    schema = th.PropertiesList(th.Property("uri", th.StringType)).to_dict()
+    schema = th.PropertiesList(
+        th.Property("uri", th.StringType), th.Property("selectedVersion", th.StringType)
+    ).to_dict()
 
     # https://sdk.meltano.com/en/latest/parent_streams.html
     def get_child_context(self, record: dict, context: Optional[dict]) -> dict:
@@ -141,6 +161,20 @@ class EscoSkillsDetails(TapEscoStream):
     name = "skills_details"  # Stream name
     path = "/resource/skill?uri={uri}"  # API endpoint after base_url
     primary_keys = ["uri"]
+
+    schema = th.PropertiesList(
+        th.Property("uri", th.StringType),
+        th.Property("uri_level_0", th.StringType),
+        th.Property("uri_level_1", th.StringType),
+        th.Property("uri_level_2", th.StringType),
+        th.Property("title", th.StringType),
+        th.Property("title_level_0", th.StringType),
+        th.Property("title_level_1", th.StringType),
+        th.Property("title_level_2", th.StringType),
+        th.Property("alternativeLabel_en", th.StringType),
+        th.Property("description_en", th.StringType),
+        th.Property("selectedVersion", th.StringType),
+    ).to_dict()
 
     def post_process(
         self, row: Dict[str, Any], context: Optional[Dict[str, Any]] = None
@@ -168,16 +202,3 @@ class EscoSkillsDetails(TapEscoStream):
             if "en" in row["alternativeLabel"]:
                 row["alternativeLabel_en"] = " | ".join(row["alternativeLabel"]["en"])
         return row
-
-    schema = th.PropertiesList(
-        th.Property("uri", th.StringType),
-        th.Property("uri_level_0", th.StringType),
-        th.Property("uri_level_1", th.StringType),
-        th.Property("uri_level_2", th.StringType),
-        th.Property("title", th.StringType),
-        th.Property("title_level_0", th.StringType),
-        th.Property("title_level_1", th.StringType),
-        th.Property("title_level_2", th.StringType),
-        th.Property("alternativeLabel_en", th.StringType),
-        th.Property("description_en", th.StringType),
-    ).to_dict()

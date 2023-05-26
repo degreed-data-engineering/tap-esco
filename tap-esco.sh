@@ -11,5 +11,6 @@ TOML_DIR=$(dirname "$0")
 
 cd "$TOML_DIR" || exit
 poetry install 1>&2
-poetry run tap-esco $*
-# poetry run tap-esco $* > output.json
+# poetry run tap-esco --state=state.json $*
+# poetry run tap-esco --state=state.json $* > output.json
+poetry run tap-esco > output.json
