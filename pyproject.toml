@@ -2,6 +2,7 @@
 name = "tap-esco"
 version = "0.0.1"
 description = "`tap-esco` is Singer-compliant tap built with Singer SDK."
+authors = ["Your Name <you@example.com>"]
 license = "Apache v2"
 
 [tool.poetry.dependencies]
