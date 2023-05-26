@@ -4,7 +4,7 @@ import logging
 import requests
 import re
 from http import HTTPStatus
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 from urllib.request import urlopen
 from typing import Optional, Any, Dict
 from singer_sdk import typing as th
@@ -34,6 +34,51 @@ class TapEscoStream(RESTStream):
         end_index = start_index + html[start_index:].find(end_string)
         html_slice = html[start_index:end_index]
         self.selectedVersion = re.findall(regex, html_slice)[0]
+
+    def response_error_message(self, response: requests.Response) -> str:
+        """Build error message for invalid http statuses."""
+        full_path = urlparse(response.url).path or self.path
+        error_type = (
+            "Client"
+            if HTTPStatus.BAD_REQUEST
+            <= response.status_code
+            < HTTPStatus.INTERNAL_SERVER_ERROR
+            else "Server"
+        )
+
+        return (
+            f"{response.status_code} {error_type} Error: "
+            f"{response.reason} for path: {full_path}"
+        )
+
+    def validate_response(self, response):
+        """Updating the "validate_response" function of the Meltano SDK as ESCO can return an error state = 500 in case a URI has issues in it.
+        See: https://github.com/meltano/sdk/blob/54222bb2dc1903c0816347952c6a77c30267f30f/singer_sdk/streams/rest.py
+        Status list: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+        """
+        if response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:  # 500
+            msg = "Possible error are URI: {uri}".format(uri=unquote(str(response.url)))
+            logging.warning(msg)
+
+        if (
+            response.status_code == HTTPStatus.TOO_MANY_REQUESTS  # 429
+            or HTTPStatus.INTERNAL_SERVER_ERROR  # 500
+            < response.status_code
+            <= max(HTTPStatus)  # 511
+        ):
+            msg = self.response_error_message(response)
+            raise RetriableAPIError(msg, response)
+
+        if (
+            HTTPStatus.BAD_REQUEST  # 400
+            <= response.status_code
+            < HTTPStatus.TOO_MANY_REQUESTS  # 429
+            or HTTPStatus.REQUEST_HEADER_FIELDS_TOO_LARGE  # 431
+            <= response.status_code
+            < HTTPStatus.INTERNAL_SERVER_ERROR  # 500
+        ):
+            msg = self.response_error_message(response)
+            raise FatalAPIError(msg)
 
     def parse_response(self, response: requests.Response):
         if response.json():
