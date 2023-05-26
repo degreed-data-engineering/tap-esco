@@ -35,30 +35,6 @@ class TapEscoStream(RESTStream):
         html_slice = html[start_index:end_index]
         self.selectedVersion = re.findall(regex, html_slice)[0]
 
-    def validate_response(self, response):
-        """Updating the "validate_response" function of the Meltano SDK as ESCO can return an error state = 500 in case a URI has issues in it.
-        See: https://github.com/meltano/sdk/blob/54222bb2dc1903c0816347952c6a77c30267f30f/singer_sdk/streams/rest.py
-        """
-        if response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:  # 500
-            msg = "Possible error are URI: {uri}".format(uri=unquote(str(response.url)))
-            logging.warning(msg)
-        if (
-            response.status_code in self.extra_retry_statuses
-            or HTTPStatus.INTERNAL_SERVER_ERROR  # 500
-            < response.status_code
-            <= max(HTTPStatus)  # 511
-        ):
-            msg = self.response_error_message(response)
-            raise RetriableAPIError(msg, response)
-
-        if (
-            HTTPStatus.BAD_REQUEST  # 400
-            <= response.status_code
-            < HTTPStatus.INTERNAL_SERVER_ERROR  # 500
-        ):
-            msg = self.response_error_message(response)
-            raise FatalAPIError(msg)
-
     def parse_response(self, response: requests.Response):
         if response.json():
             if "logref" not in response.json():
