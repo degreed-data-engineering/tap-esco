@@ -3,6 +3,7 @@
 import logging
 import requests
 import re
+import time
 from http import HTTPStatus
 from urllib.parse import unquote, urlparse
 from urllib.request import urlopen
@@ -24,6 +25,7 @@ class TapEscoStream(RESTStream):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.sleep_time = 0
         # Getting last available ESCO version scraping ESCO website
         esco_url = "https://esco.ec.europa.eu/en/classification/skill_main"
         start_string = '<div class="block-wrapper--esco_version">'
@@ -57,8 +59,26 @@ class TapEscoStream(RESTStream):
         Status list: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
         """
         if response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:  # 500
-            msg = "Possible error are URI: {uri}".format(uri=unquote(str(response.url)))
+            msg = "Error 500 raised for URI --> {uri}. Error text: {text}".format(
+                uri=unquote(str(response.url)), text=response.text
+            )
             logging.warning(msg)
+
+        if response.status_code == 104:
+            self.sleep_time = self.sleep_time + 60
+            sleeping_msg = (
+                "Error 104 raised. Sleeping for {sleep_time} seconds..".format(
+                    sleep_time=self.sleep_time
+                )
+            )
+            logging.warning(sleeping_msg)
+            time.sleep(self.sleep_time)
+            # self.sleep_time = self.sleep_time + 60
+            msg = self.response_error_message(response)
+            if self.sleep_time > 300:
+                raise FatalAPIError(msg)
+            else:
+                raise RetriableAPIError(msg, response)
 
         if (
             response.status_code == HTTPStatus.TOO_MANY_REQUESTS  # 429
