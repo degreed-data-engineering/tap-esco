@@ -62,7 +62,7 @@ class EscoSkillsDetails(TapEscoStream):
     )  # API endpoint after base_url
     primary_keys = ["uri"]
     records_jsonpath = "$[*]"  # https://jsonpath.com Use requests response json to identify the json path
-    # replication_key = "selectedVersion"
+    replication_key = "selectedVersion"
     schema = th.PropertiesList(
         th.Property("uri", th.StringType),
         th.Property("title", th.StringType),
@@ -101,12 +101,6 @@ class EscoSkillsDetails(TapEscoStream):
                 alternativeLabel_en = ""
         else:
             alternativeLabel_en = ""
-        # uri_level_2
-        # title_level_2
-        # uri_level_1
-        # title_level_1
-        # uri_level_0
-        # title_level_0
 
         new_row = pd.DataFrame(
             [
@@ -116,12 +110,12 @@ class EscoSkillsDetails(TapEscoStream):
                     "description_en": description_en,
                     "alternativeLabel_en": alternativeLabel_en,
                     "selectedVersion": self.selectedVersion,
-                    "uri_level_2": "",
-                    "title_level_2": "",
-                    "uri_level_1": "",
-                    "title_level_1": "",
-                    "uri_level_0": "",
-                    "title_level_0": "",
+                    "uri_level_2": self.uri_level_2,
+                    "title_level_2": self.title_level_2,
+                    "uri_level_1": self.uri_level_1,
+                    "title_level_1": self.title_level_1,
+                    "uri_level_0": self.uri_level_0,
+                    "title_level_0": self.title_level_0,
                 }
             ]
         )
@@ -150,32 +144,30 @@ class EscoSkillsDetails(TapEscoStream):
                     logging.warning("Error found at url: {}".format(response.url))
                     continue
 
-    def _get_uris(self, response, i):
+    def _get_uris(self, response):
         if response.status_code == 200 and response.json():
             if "narrowerConcept" in response.json()["_links"]:
                 for narrowerConcept in response.json()["_links"]["narrowerConcept"]:
                     uri = narrowerConcept["uri"]
-                    title = narrowerConcept["title"]
-                    if uri.startswith("http://data.europa.eu/esco/skill/S7"):
-                        logging.info(i)
-                        i += 1
-                        if i > 2:
-                            i = 2
-                        logging.info("Skills taxonomy level uri: {}".format(uri))
-                        response = requests.get(
-                            self.url_base + "/resource/concept?uri=" + uri
-                        )
-                        response = self._get_uris(response, i)
-                    else:
-                        logging.info(
-                            "##### Skipping skills taxonomy level uri: {}".format(uri)
-                        )
+                    if (uri.split("/")[-1]).count(".") == 0:
+                        self.uri_level_0 = uri
+                        self.title_level_0 = narrowerConcept["title"]
+                    if (uri.split("/")[-1]).count(".") == 1:
+                        self.uri_level_1 = uri
+                        self.title_level_1 = narrowerConcept["title"]
+                    if (uri.split("/")[-1]).count(".") == 2:
+                        self.uri_level_2 = uri
+                        self.title_level_2 = narrowerConcept["title"]
+                    logging.info("Skills taxonomy level uri: {}".format(uri))
+                    response = requests.get(
+                        self.url_base + "/resource/concept?uri=" + uri
+                    )
+                    response = self._get_uris(response)
+
             elif "narrowerSkill" in response.json()["_links"]:
                 uris_list = []
                 narrowerSkills = response.json()["_links"]["narrowerSkill"]
                 logging.info("Found {} skills".format(len(narrowerSkills)))
-                i = 0
-                logging.warn(i)
                 for narrowerSkill in narrowerSkills:
                     uris_list.append(narrowerSkill["uri"])
                     if len(uris_list) == 50:
@@ -189,7 +181,7 @@ class EscoSkillsDetails(TapEscoStream):
     def parse_response(self, response: requests.Response) -> Iterable[dict]:
         """Parse the response and return an iterator of result records."""
         if response.json():
-            self._get_uris(response, 0)
+            self._get_uris(response)
             logging.info("Total number of skills: {}".format(len(self.results_df)))
             input = self.results_df.to_dict()
             yield from extract_jsonpath(self.records_jsonpath, input=input)
