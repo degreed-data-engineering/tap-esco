@@ -28,7 +28,6 @@ class TapEscoStream(RESTStream):
             "title",
             "description_en",
             "alternativeLabel_en",
-            "selectedVersion",
             "uri_level_0",
             "title_level_0",
             "uri_level_1",
@@ -47,7 +46,6 @@ class TapEscoStream(RESTStream):
         end_index = start_index + html[start_index:].find(end_string)
         html_slice = html[start_index:end_index]
         self.selectedVersion = re.findall(regex, html_slice)[0]
-        logging.info("ESCO latest version: " + self.selectedVersion)
 
     @property
     def url_base(self) -> str:
@@ -68,13 +66,13 @@ class EscoSkillsDetails(TapEscoStream):
         th.Property("title", th.StringType),
         th.Property("description_en", th.StringType),
         th.Property("alternativeLabel_en", th.StringType),
-        th.Property("selectedVersion", th.StringType),
         th.Property("uri_level_0", th.StringType),
         th.Property("title_level_0", th.StringType),
         th.Property("uri_level_1", th.StringType),
         th.Property("title_level_1", th.StringType),
         th.Property("uri_level_2", th.StringType),
         th.Property("title_level_2", th.StringType),
+        th.Property("selectedVersion", th.StringType),
     ).to_dict()
 
     def _create_dataframe(self, response):
@@ -109,7 +107,6 @@ class EscoSkillsDetails(TapEscoStream):
                     "title": title,
                     "description_en": description_en,
                     "alternativeLabel_en": alternativeLabel_en,
-                    "selectedVersion": self.selectedVersion,
                     "uri_level_2": self.uri_level_2,
                     "title_level_2": self.title_level_2,
                     "uri_level_1": self.uri_level_1,
@@ -180,8 +177,23 @@ class EscoSkillsDetails(TapEscoStream):
 
     def parse_response(self, response: requests.Response) -> Iterable[dict]:
         """Parse the response and return an iterator of result records."""
+
+        if "replication_key_value" in self.stream_state:
+            current_version = self.stream_state["replication_key_value"]
+            logging.info("ESCO latest version: " + self.selectedVersion)
+            logging.info("ESCO current version: " + current_version)
+            if self.selectedVersion == current_version:
+                logging.info("ESCO version is up to date. Exiting.")
+                exit()
+
         if response.json():
             self._get_uris(response)
             logging.info("Total number of skills: {}".format(len(self.results_df)))
             input = self.results_df.to_dict()
             yield from extract_jsonpath(self.records_jsonpath, input=input)
+
+    def post_process(
+        self, row: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        row["selectedVersion"] = self.selectedVersion
+        return row
