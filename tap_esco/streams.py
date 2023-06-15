@@ -189,8 +189,9 @@ class EscoSkillsDetails(TapEscoStream):
         if response.json():
             self._get_uris(response)
             logging.info("Total number of skills: {}".format(len(self.results_df)))
-            input = self.results_df.to_dict()
-            yield from extract_jsonpath(self.records_jsonpath, input=input)
+            input = self.results_df.to_dict(orient="records")
+            for row in input:
+                yield from extract_jsonpath(self.records_jsonpath, input=row)
 
     def post_process(
         self, row: Dict[str, Any], context: Optional[Dict[str, Any]] = None
