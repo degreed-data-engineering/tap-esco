@@ -4,7 +4,7 @@ import logging
 import requests
 import re
 import pandas as pd
-
+import backoff
 from urllib.request import urlopen
 from typing import Optional, Iterable, Dict, Any
 from singer_sdk import typing as th
@@ -120,6 +120,9 @@ class EscoSkillsDetails(TapEscoStream):
             [self.results_df, new_row], axis=0, ignore_index=True
         )
 
+    @backoff.on_exception(
+        backoff.expo, (requests.exceptions.ConnectionError), max_tries=5
+    )
     def _get_skills_details(self, uris_list):
         uris = ",".join(uris_list)
         response = requests.get(self.url_base + "/resource/concept?uris=" + uris)
@@ -141,6 +144,9 @@ class EscoSkillsDetails(TapEscoStream):
                     logging.warning("Error found at url: {}".format(response.url))
                     continue
 
+    @backoff.on_exception(
+        backoff.expo, (requests.exceptions.ConnectionError), max_tries=5
+    )
     def _get_uris(self, response):
         if response.status_code == 200 and response.json():
             if "narrowerConcept" in response.json()["_links"]:
