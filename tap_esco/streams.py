@@ -1,15 +1,20 @@
 """Stream class for tap-esco."""
 
-import logging
-import requests
-import re
-import pandas as pd
 import backoff
-from urllib.request import urlopen
-from typing import Optional, Iterable, Dict, Any
+import errno
+import logging
+import pandas as pd
+import re
+import requests
+import time
+
 from singer_sdk import typing as th
 from singer_sdk.streams import RESTStream
 from singer_sdk.helpers.jsonpath import extract_jsonpath
+from socket import error as SocketError
+from typing import Optional, Iterable, Dict, Any
+from urllib.request import urlopen
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -123,9 +128,30 @@ class EscoSkillsDetails(TapEscoStream):
     @backoff.on_exception(
         backoff.expo, (requests.exceptions.ConnectionError), max_tries=5
     )
+    def _get_response(self, uri):
+        sleep_time = 0
+        while sleep_time < 600:
+            try:
+                response = requests.get(uri)
+                return response
+            except SocketError as e:
+                logging.warning(
+                    "Error: {e} - Sleeping for {sleep_time} seconds".format(
+                        e=e, sleep_time=sleep_time
+                    )
+                )
+                sleep_time += 60
+                time.sleep(sleep_time)
+        if sleep_time >= 600:
+            logging.error("Exiting tap-esco. Error: {e}".format(e=e))
+            exit()
+
+    @backoff.on_exception(
+        backoff.expo, (requests.exceptions.ConnectionError), max_tries=5
+    )
     def _get_skills_details(self, uris_list):
         uris = ",".join(uris_list)
-        response = requests.get(self.url_base + "/resource/concept?uris=" + uris)
+        response = self._get_response(self.url_base + "/resource/concept?uris=" + uris)
         if response.status_code == 200:
             logging.info("Parsed {len} skills".format(len=len(uris_list)))
             for uri in response.json()["_embedded"]:
@@ -136,7 +162,9 @@ class EscoSkillsDetails(TapEscoStream):
                 "Error found while running bulk operation. Processing skills one by one"
             )
             for uri in uris_list:
-                response = requests.get(self.url_base + "/resource/concept?uri=" + uri)
+                response = self._get_response(
+                    self.url_base + "/resource/concept?uri=" + uri
+                )
                 if response.status_code == 200:
                     logging.info("Parsed uri: {uri}".format(uri=uri))
                     self._create_dataframe(response.json())
@@ -162,7 +190,7 @@ class EscoSkillsDetails(TapEscoStream):
                         self.uri_level_2 = uri
                         self.title_level_2 = narrowerConcept["title"]
                     logging.info("Skills taxonomy level uri: {}".format(uri))
-                    response = requests.get(
+                    response = self._get_response(
                         self.url_base + "/resource/concept?uri=" + uri
                     )
                     response = self._get_uris(response)
