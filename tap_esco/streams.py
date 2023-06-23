@@ -130,19 +130,19 @@ class EscoSkillsDetails(TapEscoStream):
     )
     def _get_response(self, uri):
         sleep_time = 0
-        while sleep_time < 600:
+        while sleep_time <= 1200:
             try:
                 response = requests.get(uri)
                 return response
             except SocketError as e:
+                sleep_time += 60
                 logging.warning(
                     "Error: {e} - Sleeping for {sleep_time} seconds".format(
                         e=e, sleep_time=sleep_time
                     )
                 )
-                sleep_time += 60
                 time.sleep(sleep_time)
-        if sleep_time >= 600:
+        if sleep_time > 1200:
             logging.error("Exiting tap-esco. Error: {e}".format(e=e))
             exit()
 
