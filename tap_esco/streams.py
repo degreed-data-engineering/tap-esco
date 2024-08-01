@@ -43,14 +43,18 @@ class TapEscoStream(RESTStream):
         self.results_df = pd.DataFrame(columns=self.columns)
         # Getting last available ESCO version scraping ESCO website
         esco_url = "https://esco.ec.europa.eu/en/classification/skill_main"
-        start_string = '<div class="block-wrapper--esco_version">'
-        end_string = "</div>"
-        regex = "v\d\.\d\.\d"
-        html = urlopen(esco_url).read().decode("utf-8")
-        start_index = html.find(start_string) + len(start_string)
-        end_index = start_index + html[start_index:].find(end_string)
-        html_slice = html[start_index:end_index]
-        self.selectedVersion = re.findall(regex, html_slice)[0]
+        html = urlopen(esco_url).read().decode('utf-8')
+        pattern = r'ESCO dataset - v(\d+)\.(\d+)\.(\d+)'
+        matches = re.findall(pattern, html)
+        versions = [tuple(map(int, match)) for match in matches]
+        if versions:
+            highest_version = max(versions)
+            highest_version_str = f'v{highest_version[0]}.{highest_version[1]}.{highest_version[2]}'
+            logging.info(f"ESCO highest version found: {highest_version_str}")
+            self.selectedVersion = highest_version_str
+        else:
+            logging.error("No version strings found. Exiting.")
+            exit(1)
 
     @property
     def url_base(self) -> str:
